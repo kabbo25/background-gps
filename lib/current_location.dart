@@ -23,9 +23,7 @@ class Locationservices {
   }
 
   static Future<String> checkLocation() async {
-    LocationPermission permission;
-
-    permission = await Geolocator.checkPermission();
+    LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
@@ -36,7 +34,7 @@ class Locationservices {
     try {
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
-      ).timeout(const Duration(seconds: 3), onTimeout: () {
+      ).timeout(const Duration(seconds: 5), onTimeout: () {
         throw TimeoutException('Location retrieval timed out');
       });
 
@@ -58,6 +56,16 @@ class Locationservices {
       }
       return "Error: Unable to get location";
     }
+  }
+
+  static Future<bool> isInsideOffice(double latitude, double longitude) async {
+    double distanceInMeters = calculateDistance(
+      centerLat,
+      centerLong,
+      latitude,
+      longitude,
+    );
+    return distanceInMeters <= radius;
   }
 
   static Future<String> getAddress(double lat, double lon) async {
