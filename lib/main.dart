@@ -1,390 +1,256 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:developer' as developer;
-import 'dart:ui';
 
-import 'package:fcm_demo/current_location.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
-import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+// This is the entry point for the overlay
 @pragma('vm:entry-point')
+void overlayMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(OverlayWidget());
+}
+
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  developer.log("Handling a background message: ${message.messageId}");
-  await showFullScreenNotification(message);
-  //await initializeService();
-  // if (message.data['action'] == 'trigger_office') {
-  //   developer.log('Triggering office check');
-  //   final prefs = await SharedPreferences.getInstance();
-  //   double? latitude = prefs.getDouble('last_latitude');
-  //   double? longitude = prefs.getDouble('last_longitude');
 
-  //   developer
-  //       .log("Location not available. Attempting to get current position...");
-  //   try {
-  //     Position position = await Geolocator.getCurrentPosition(
-  //       desiredAccuracy: LocationAccuracy.high,
-  //     ).timeout(const Duration(seconds: 1), onTimeout: () {
-  //       throw TimeoutException('Location retrieval timed out');
-  //     });
-  //     latitude = position.latitude;
-  //     longitude = position.longitude;
-  //     developer.log("Current position: lat=$latitude, long=$longitude");
-  //     // Save this position to SharedPreferences
-  //     await prefs.setDouble('last_latitude', 0);
-  //     await prefs.setDouble('last_longitude', 0);
-  //   } catch (e) {
-  //     String address = prefs.getString('office_address') ?? 'un';
-  //     developer.log('Retrieved from SharedPreferences: $address');
-  //     developer.log("Error getting current position: $e");
-  //   }
-  // }
-}
-
-// Future<bool> _handleLocationPermission() async {
-//   bool serviceEnabled;
-//   LocationPermission permission;
-
-//   serviceEnabled = await Geolocator.isLocationServiceEnabled();
-//   if (!serviceEnabled) {
-//     developer.log('Location services are disabled.');
-//     return false;
-//   }
-
-//   permission = await Geolocator.checkPermission();
-//   if (permission == LocationPermission.denied) {
-//     permission = await Geolocator.requestPermission();
-//     if (permission == LocationPermission.denied) {
-//       developer.log('Location permissions are denied');
-//       return false;
-//     }
-//   }
-
-//   if (permission == LocationPermission.deniedForever) {
-//     developer.log('Location permissions are permanently denied');
-//     return false;
-//   }
-
-//   return true;
-// }
-
-Future<void> initializeService() async {
-  final service = FlutterBackgroundService();
-
-  await service.configure(
-    androidConfiguration: AndroidConfiguration(
-      onStart: onStart,
-      autoStart: true,
-      isForegroundMode: true,
-      notificationChannelId: 'my_foreground',
-      initialNotificationTitle: 'AWESOME SERVICE',
-      initialNotificationContent: 'Initializing',
-      foregroundServiceNotificationId: 888,
-    ),
-    iosConfiguration: IosConfiguration(
-      autoStart: true,
-      onForeground: onStart,
-      onBackground: onIosBackground,
-    ),
+  // Show overlay with location
+  await FlutterOverlayWindow.showOverlay(
+    height: 2000,
+    width: 1000,
+    enableDrag: true,
+    flag: OverlayFlag.defaultFlag,
+    alignment: OverlayAlignment.center,
+    visibility: NotificationVisibility.visibilityPublic,
+    positionGravity: PositionGravity.auto,
+    overlayTitle: "Current Location",
   );
 
-  await service.startService();
-}
-// Future<void> startForegroundService() async {
-//   final service = FlutterBackgroundService();
-//   await service.configure(
-//     androidConfiguration: AndroidConfiguration(
-//       onStart: onStart,
-//       autoStart: true,
-//       isForegroundMode: true,
-//       notificationChannelId: 'my_foreground',
-//       initialNotificationTitle: 'AWESOME SERVICE',
-//       initialNotificationContent: 'Initializing',
-//       foregroundServiceNotificationId: 888,
-//     ),
-//     iosConfiguration: IosConfiguration(
-//       autoStart: true,
-//       onForeground: onStart,
-//       onBackground: onIosBackground,
-//     ),
-//   );
+  // Fetch location when notification is received in background
+  final location = await _getLocationString();
+  developer.log('Background Location: $location');
 
-//   await service.startService();
-// }
-
-@pragma('vm:entry-point')
-void onStart(ServiceInstance service) async {
-  DartPluginRegistrant.ensureInitialized();
-
-  // // Start foreground service immediately
-  // service.on('setAsForeground').listen((event) {
-  //   service.setAsForegroundService();
-  // });
-  // service.invoke('setAsForeground');
-
-  developer.log('Location service started');
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-      FlutterLocalNotificationsPlugin();
-
-  // Initialize notification channel
-  const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'location_service_channel',
-    'Location Service Notifications',
-    description: 'This channel is used for location service notifications.',
-    importance: Importance.low,
-  );
-
-  await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(channel);
-
-  const locationSettings = LocationSettings(
-    accuracy: LocationAccuracy.high,
-    distanceFilter: 10,
-  );
-
-  StreamSubscription<Position>? positionStream;
-
-  positionStream =
-      Geolocator.getPositionStream(locationSettings: locationSettings)
-          .listen((Position position) async {
-    String address = await Locationservices.getAddress(
-        position.latitude, position.longitude);
-    bool isInsideOffice =
-        !address.contains("You are outside the office premises");
-    developer.log('inside office: $isInsideOffice');
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('office_validated', isInsideOffice);
-    await prefs.setString('office_address', address);
-    developer.log('office address: $address');
-
-    service.invoke(
-      'update',
-      {
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-        'isInsideOffice': isInsideOffice,
-      },
-    );
-  });
-
-  // Stop the service after 2 minutes
-  Timer(const Duration(minutes: 2), () async {
-    await positionStream?.cancel();
-    developer.log('Location service stopped after 2 minutes');
-    service.stopSelf();
-  });
-}
-
-@pragma('vm:entry-point')
-Future<bool> onIosBackground(ServiceInstance service) async {
-  return true;
-}
-
-Future<void> showFullScreenNotification(RemoteMessage message) async {
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-      FlutterLocalNotificationsPlugin();
-
-  // Create a high-priority notification channel
-  const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'full_screen_channel',
-    'Full Screen Notifications',
-    description: 'Notifications that appear as full-screen alerts',
-    importance: Importance.max,
-    playSound: true,
-    showBadge: true,
-    enableVibration: true,
-  );
-
-  await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(channel);
-
-  // Initialize the plugin
-  const AndroidInitializationSettings initializationSettingsAndroid =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-  const InitializationSettings initializationSettings =
-      InitializationSettings(android: initializationSettingsAndroid);
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-
-  // Configure the notification
-  final AndroidNotificationDetails androidPlatformChannelSpecifics =
-      AndroidNotificationDetails(
-    channel.id,
-    channel.name,
-    channelDescription: channel.description,
-    importance: Importance.max,
-    priority: Priority.max,
-    fullScreenIntent: true,
-    ticker: 'ticker',
-    category: AndroidNotificationCategory.call, // Use call category
-    visibility: NotificationVisibility.public,
-  );
-
-  final NotificationDetails platformChannelSpecifics =
-      NotificationDetails(android: androidPlatformChannelSpecifics);
-
-  // Show the notification
-  await flutterLocalNotificationsPlugin.show(
-    0,
-    message.notification?.title ?? 'Incoming Call',
-    message.notification?.body ?? 'Someone is calling you',
-    platformChannelSpecifics,
-    payload: 'item x',
-  );
+  /// broadcast data to and from overlay app
+  await FlutterOverlayWindow.shareData(location);
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase
   await Firebase.initializeApp();
+
+  // Set up background message handler
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-  //await initializeService();
-  runApp(const MyApp());
-}
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'FCM Demo',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: const MyHomePage(title: 'FCM Demo Home Page'),
-    );
+  // Request overlay permission
+  bool? status = await FlutterOverlayWindow.isPermissionGranted();
+  developer.log('Overlay permission status: $status');
+  if (status != true) {
+    await FlutterOverlayWindow.requestPermission();
   }
+
+  // Get and log FCM token
+  String? token = await FirebaseMessaging.instance.getToken();
+  developer.log('FCM Token: $token');
+
+  runApp(MyApp());
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  final String title;
-
+class MyApp extends StatefulWidget {
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  _MyAppState createState() => _MyAppState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  String currentAddress = 'Unknown';
+class _MyAppState extends State<MyApp> {
+  static const platform = MethodChannel('com.yourapp/location');
+  String _location = 'Unknown';
 
   @override
   void initState() {
     super.initState();
-    setupFCM();
-    _loadCurrentAddress();
-    // _requestOverlayPermission();
+    _checkLocationPermission();
+    platform.setMethodCallHandler(_handleMethod);
   }
 
-  Future<void> _loadCurrentAddress() async {
-    String address = await Locationservices.checkLocation();
-    setState(() {
-      currentAddress = address;
-    });
-  }
-
-  Future<void> _requestOverlayPermission() async {
-    if (await Permission.systemAlertWindow.isDenied) {
-      await Permission.systemAlertWindow.request();
+  Future<void> _checkLocationPermission() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      // Location services are not enabled
+      setState(() {
+        _location = 'Location services are disabled';
+      });
+      return;
     }
-  }
 
-  Future<void> postDeviceToken(String deviceToken, int employeeId) async {
-    // Replace with your computer's local IP address
-    const String url = 'http://10.0.3.135:8080/api/device-token';
-
-    final Map<String, dynamic> payload = {
-      'deviceToken': deviceToken,
-      'employeeId': employeeId,
-    };
-
-    try {
-      final response = await http.post(
-        Uri.parse(url),
-        headers: <String, String>{
-          'Content-Type': 'application/json; charset=UTF-8',
-        },
-        body: jsonEncode(payload),
-      );
-
-      if (response.statusCode == 201) {
-        developer.log('Device token posted successfully');
-      } else {
-        developer.log(
-            'Failed to post device token. Status code: ${response.statusCode}');
-        developer.log('Response body: ${response.body}');
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        // Permission denied
+        setState(() {
+          _location = 'Location permissions are denied';
+        });
+        return;
       }
-    } catch (e) {
-      developer.log('Error posting device token: $e');
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      // Permissions are denied forever
+      setState(() {
+        _location = 'Location permissions are permanently denied';
+      });
+      return;
+    }
+
+    // Permission granted, proceed with location fetching
+    _getLocation();
+  }
+
+  Future<void> _getLocation() async {
+    developer.log('Fetching location...');
+    try {
+      final String result = await platform.invokeMethod('getLocation');
+      setState(() {
+        _location = result;
+      });
+      developer.log(result);
+    } on PlatformException catch (e) {
+      developer.log("Failed to get location: '${e.message}'.");
+      setState(() {
+        _location = "Failed to get location: '${e.message}'.";
+      });
+    } on MissingPluginException catch (e) {
+      developer.log("Plugin not available: ${e.message}");
+      setState(() {
+        _location = "Plugin not available: ${e.message}";
+      });
     }
   }
 
-  Future<void> setupFCM() async {
-    FirebaseMessaging messaging = FirebaseMessaging.instance;
-    String token = await messaging.getToken() ?? 'latest';
-    developer.log('FCM Token: $token');
-    postDeviceToken(token, 33);
-    NotificationSettings settings = await messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      developer.log('User granted permission');
-
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        developer.log("Received a foreground message: ${message.messageId}");
-        //loadCurrentAddress(); // Reload address when a message is received
-      });
-
-      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-        developer.log("Opened app from notification: ${message.messageId}");
-        //loadCurrentAddress(); // Reload address when app is opened from notification
-      });
-    } else {
-      developer.log('User declined or has not accepted permission');
+  Future<dynamic> _handleMethod(MethodCall call) async {
+    developer.log('Method ${call.method} called');
+    switch (call.method) {
+      case 'updateLocation':
+        final double latitude = call.arguments['latitude'];
+        final double longitude = call.arguments['longitude'];
+        developer.log('Location updated: $latitude, $longitude');
+        setState(() {
+          _location = 'Lat: $latitude, Long: $longitude';
+        });
+        break;
+      default:
+        developer.log('No such method ${call.method}');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'Current Address:',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              currentAddress,
-              style: const TextStyle(fontSize: 16),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: setupFCM,
-              child: const Text('Refresh Address'),
-            ),
-          ],
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(title: Text('Location on Push Notification')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('Current Location: $_location'),
+              ElevatedButton(
+                onPressed: _getLocation,
+                child: Text('Refresh Location'),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+class OverlayWidget extends StatefulWidget {
+  @override
+  _OverlayWidgetState createState() => _OverlayWidgetState();
+}
+
+class _OverlayWidgetState extends State<OverlayWidget> {
+  String _location = 'Fetching location...';
+
+  @override
+  void initState() {
+    super.initState();
+    _listenToOverlayData();
+  }
+
+  void _listenToOverlayData() {
+    FlutterOverlayWindow.overlayListener.listen((data) {
+      if (data != null && data is String) {
+        setState(() {
+          _location = data;
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        backgroundColor: Colors.black.withOpacity(0.8),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text(
+                  'Current Location',
+                  style: TextStyle(color: Colors.white, fontSize: 18),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 16),
+                Text(
+                  _location,
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 16),
+                ElevatedButton(
+                  child: Text('Close'),
+                  onPressed: () {
+                    FlutterOverlayWindow.closeOverlay();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Helper function to get location as a string
+Future<String> _getLocationString() async {
+  bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+  if (!serviceEnabled) {
+    return 'Location services are disabled';
+  }
+
+  LocationPermission permission = await Geolocator.checkPermission();
+  if (permission == LocationPermission.denied) {
+    permission = await Geolocator.requestPermission();
+    if (permission == LocationPermission.denied) {
+      return 'Location permissions are denied';
+    }
+  }
+
+  if (permission == LocationPermission.deniedForever) {
+    return 'Location permissions are permanently denied';
+  }
+
+  Position position = await Geolocator.getCurrentPosition();
+  return 'Lat: ${position.latitude}, Long: ${position.longitude}';
 }
