@@ -23,18 +23,20 @@ class Locationservices {
   }
 
   static Future<String> checkLocation() async {
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return "Location permission denied";
-      }
-    }
+    // LocationPermission permission = await Geolocator.checkPermission();
+    // permission = await Geolocator.requestPermission();
+    //
+    // if (permission == LocationPermission.denied) {
+    //   permission = await Geolocator.requestPermission();
+    //   if (permission == LocationPermission.denied) {
+    //     return "Location permission denied";
+    //   }
+    // }
 
     try {
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
-      ).timeout(const Duration(seconds: 5), onTimeout: () {
+      ).timeout(const Duration(seconds: 60), onTimeout: () {
         throw TimeoutException('Location retrieval timed out');
       });
 
@@ -51,6 +53,7 @@ class Locationservices {
         return "You are outside the office premises $address";
       }
     } catch (e) {
+      print("Exception : $e"); // Print the exception
       if (e is TimeoutException) {
         return "Error: Location retrieval timed out";
       }
@@ -69,15 +72,37 @@ class Locationservices {
   }
 
   static Future<String> getAddress(double lat, double lon) async {
-    try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(lat, lon);
-      if (placemarks.isNotEmpty) {
-        Placemark place = placemarks[0];
-        return "${place.street}, ${place.subLocality}, ${place.locality}, ${place.postalCode}, ${place.country}";
+    // LocationPermission permission = await Geolocator.requestPermission();
+    // if (permission == LocationPermission.denied ||
+    //     permission == LocationPermission.deniedForever) {
+    //   // Handle the scenario where permission is denied
+    //   print("Location permission denied");
+    // } else {
+      // Permission granted, you can now use location services
+      try {
+        List<Placemark> placemarks = await placemarkFromCoordinates(lat, lon);
+        if (placemarks.isNotEmpty) {
+          Placemark place = placemarks[0];
+          return "${place.street}, ${place.subLocality}, ${place.locality}, ${place.postalCode}, ${place.country}";
+        }
+        return "Address not found";
+      } catch (e) {
+        print("Exception : $e"); // Print the exception
+        return "Error: Unable to get address";
       }
-      return "Address not found";
-    } catch (e) {
-      return "Error: Unable to get address";
+    // }
+    return "...";
+
+  }
+
+  Future<void> _checkLocationPermission() async {
+    LocationPermission permission = await Geolocator.requestPermission();
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      // Handle the scenario where permission is denied
+      print("Location permission denied");
+    } else {
+      // Permission granted, you can now use location services
     }
   }
 }
