@@ -16,11 +16,15 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 
 class LocationService : Service() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
     private val CHANNEL_ID = "location_service_channel"
+    private val NOTIFICATION_ID = 1
 
     override fun onCreate() {
         super.onCreate()
@@ -45,12 +49,15 @@ class LocationService : Service() {
             }
         }
 
-        fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            == PackageManager.PERMISSION_GRANTED) {
+            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification = buildNotification()
-        startForeground(1, notification)
+        startForeground(NOTIFICATION_ID, notification)
         return START_STICKY
     }
 

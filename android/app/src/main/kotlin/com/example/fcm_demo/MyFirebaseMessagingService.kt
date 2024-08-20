@@ -10,6 +10,10 @@ import androidx.work.WorkerParameters
 import androidx.work.WorkManager
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import androidx.core.content.ContextCompat
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.work.Data
 
 class MyFirebaseMessagingService : FirebaseMessagingService() {
 
@@ -22,30 +26,30 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     }
 }
 
-class LocationWorker(context: Context, workerParams: WorkerParameters) : Worker(context, workerParams) {
-
-    override fun doWork(): Result {
-        val intent = Intent(applicationContext, LocationService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            applicationContext.startForegroundService(intent)
-        } else {
-            applicationContext.startService(intent)
-        }
-        return Result.success()
-    }
-}
 //class LocationWorker(context: Context, workerParams: WorkerParameters) : Worker(context, workerParams) {
+//
 //    override fun doWork(): Result {
-//        if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.ACCESS_FINE_LOCATION)
-//            == PackageManager.PERMISSION_GRANTED) {
-//            val intent = Intent(applicationContext, LocationService::class.java)
-//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-//                applicationContext.startForegroundService(intent)
-//            } else {
-//                applicationContext.startService(intent)
-//            }
-//            return Result.success()
+//        val intent = Intent(applicationContext, LocationService::class.java)
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+//            applicationContext.startForegroundService(intent)
+//        } else {
+//            applicationContext.startService(intent)
 //        }
-//        return Result.failure()
+//        return Result.success()
 //    }
 //}
+class LocationWorker(context: Context, workerParams: WorkerParameters) : Worker(context, workerParams) {
+    override fun doWork(): Result {
+        if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.ACCESS_FINE_LOCATION)
+            == PackageManager.PERMISSION_GRANTED) {
+            val intent = Intent(applicationContext, LocationService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                applicationContext.startForegroundService(intent)
+            } else {
+                applicationContext.startService(intent)
+            }
+            return Result.success()
+        }
+        return Result.failure()
+    }
+}
