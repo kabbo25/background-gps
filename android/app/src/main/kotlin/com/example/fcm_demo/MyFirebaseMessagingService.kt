@@ -14,6 +14,8 @@ import androidx.core.content.ContextCompat
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.work.Data
+import android.app.PendingIntent
+import androidx.core.app.JobIntentService
 
 class MyFirebaseMessagingService : FirebaseMessagingService() {
 
@@ -40,16 +42,21 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 //}
 class LocationWorker(context: Context, workerParams: WorkerParameters) : Worker(context, workerParams) {
     override fun doWork(): Result {
-        if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.ACCESS_FINE_LOCATION)
-            == PackageManager.PERMISSION_GRANTED) {
-            val intent = Intent(applicationContext, LocationService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                applicationContext.startForegroundService(intent)
-            } else {
-                applicationContext.startService(intent)
-            }
+        val intent = Intent(applicationContext, LocationService::class.java)
+        intent.action = "START_LOCATION_SERVICE"
+
+        val pendingIntent = PendingIntent.getService(
+            applicationContext,
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        try {
+            pendingIntent.send()
             return Result.success()
+        } catch (e: PendingIntent.CanceledException) {
+            return Result.failure()
         }
-        return Result.failure()
     }
 }

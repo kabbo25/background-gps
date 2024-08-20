@@ -33,7 +33,7 @@ void main() async {
 
 Future<void> postDeviceToken(String deviceToken, int employeeId) async {
   // Replace with your computer's local IP address
-  const String url = 'http://10.0.3.135:8080/api/device-token';
+  const String url = 'http://192.168.0.6:8080/api/device-token';
   final Map<String, dynamic> payload = {
     'deviceToken': deviceToken,
     'employeeId': employeeId,

@@ -4,21 +4,17 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.Context
-import android.os.Build
 import android.app.Service
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.IBinder
+import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
-import android.widget.Toast
-import androidx.core.app.NotificationCompat
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.core.content.ContextCompat
 
 class LocationService : Service() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -28,10 +24,22 @@ class LocationService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         createNotificationChannel()
+        setupLocationUpdates()
+    }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Start the service as a foreground service immediately
+        startForeground(NOTIFICATION_ID, createNotification()) // error causing here due to mAllowStartForeground false: service com.example.fcm_demo/.LocationService
+
+        // Start location updates
+        startLocationUpdates()
+
+        return START_STICKY
+    }
+
+    private fun setupLocationUpdates() {
         val locationRequest = LocationRequest.create().apply {
             interval = 10000 // 10 seconds
             fastestInterval = 5000 // 5 seconds
@@ -42,23 +50,22 @@ class LocationService : Service() {
             override fun onLocationResult(locationResult: LocationResult) {
                 locationResult.locations.forEach { location ->
                     // Handle location updates here
-                    Toast
-                        .makeText(this@LocationService, "Location: ${location.latitude}, ${location.longitude}", Toast.LENGTH_SHORT)
-                        .show()
+                    // For example, you could send this data to your Flutter app
                 }
             }
         }
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-            == PackageManager.PERMISSION_GRANTED) {
-            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null)
-        }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = buildNotification()
-        startForeground(NOTIFICATION_ID, notification)
-        return START_STICKY
+    private fun startLocationUpdates() {
+        try {
+            fusedLocationClient.requestLocationUpdates(
+                LocationRequest.create(),
+                locationCallback,
+                null
+            )
+        } catch (unlikely: SecurityException) {
+            // Handle the case where location permission is not granted
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -70,9 +77,12 @@ class LocationService : Service() {
         fusedLocationClient.removeLocationUpdates(locationCallback)
     }
 
-    private fun buildNotification(): Notification {
+    private fun createNotification(): Notification {
         val notificationIntent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, notificationIntent,
+            PendingIntent.FLAG_IMMUTABLE
+        )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Location Service")
