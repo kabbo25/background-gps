@@ -28,35 +28,26 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     }
 }
 
-//class LocationWorker(context: Context, workerParams: WorkerParameters) : Worker(context, workerParams) {
-//
-//    override fun doWork(): Result {
-//        val intent = Intent(applicationContext, LocationService::class.java)
-//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-//            applicationContext.startForegroundService(intent)
-//        } else {
-//            applicationContext.startService(intent)
-//        }
-//        return Result.success()
-//    }
-//}
 class LocationWorker(context: Context, workerParams: WorkerParameters) : Worker(context, workerParams) {
     override fun doWork(): Result {
         val intent = Intent(applicationContext, LocationService::class.java)
         intent.action = "START_LOCATION_SERVICE"
+        // Start the LocationService as a foreground service
+        ContextCompat.startForegroundService(applicationContext, intent)
 
-        val pendingIntent = PendingIntent.getService(
-            applicationContext,
-            0,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        try {
-            pendingIntent.send()
-            return Result.success()
-        } catch (e: PendingIntent.CanceledException) {
-            return Result.failure()
-        }
+        return Result.success()
+//        val pendingIntent = PendingIntent.getService(
+//            applicationContext,
+//            0,
+//            intent,
+//            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+//        )
+//
+//        try {
+//            pendingIntent.send()
+//            return Result.success()
+//        } catch (e: PendingIntent.CanceledException) {
+//            return Result.failure()
+//        }
     }
 }
