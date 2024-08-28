@@ -65,5 +65,7 @@ dependencies {
     implementation 'com.google.android.gms:play-services-basement:17.6.0'
     implementation 'androidx.core:core:1.7.0'
     implementation "androidx.work:work-runtime-ktx:2.8.1"
+    implementation 'com.squareup.okhttp3:okhttp:4.9.3'
+
     // Other dependencies
 }

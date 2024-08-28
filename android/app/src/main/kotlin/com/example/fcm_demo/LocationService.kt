@@ -15,18 +15,29 @@ import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.IOException
+import android.util.Log
 
 class LocationService : Service() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
     private val CHANNEL_ID = "location_service_channel"
     private val NOTIFICATION_ID = 1
+    private val backendUrl = "http://10.0.3.135:8080/api/location" // Replace with your backend URL
+
 
     override fun onCreate() {
         super.onCreate()
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         createNotificationChannel()
-        setupLocationUpdates()
+        //setupLocationUpdates()
+        setupLocationRequest()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -38,24 +49,33 @@ class LocationService : Service() {
 
         return START_STICKY
     }
-
-    private fun setupLocationUpdates() {
+    private fun setupLocationRequest() {
         val locationRequest = LocationRequest.create().apply {
-            interval = 10000 // 10 seconds
-            fastestInterval = 5000 // 5 seconds
             priority = LocationRequest.PRIORITY_HIGH_ACCURACY
         }
 
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
-                locationResult.locations.forEach { location ->
-                    // Handle location updates here
-                    // For example, you could send this data to your Flutter app
+                val location = locationResult.lastLocation
+                if (location != null) {
+                    // Convert location to JSON
+                    val jsonObject = JSONObject().apply {
+                        put("latitude", location.latitude)
+                        put("longitude", location.longitude)
+                        put("timestamp", location.time)
+                    }
+
+                    // Send the location to the backend
+                    sendLocationToBackend(jsonObject.toString())
+
+                    //log location
+                    val TAG = "yourLocation";
+                    Log.d("FC", "onLocationResult: " + jsonObject.toString());
+                    Log.d(TAG, "onLocationResult: " + jsonObject.toString());
                 }
             }
         }
     }
-
     private fun startLocationUpdates() {
         try {
             fusedLocationClient.requestLocationUpdates(
@@ -64,9 +84,66 @@ class LocationService : Service() {
                 null
             )
         } catch (unlikely: SecurityException) {
-            // Handle the case where location permission is not granted
+            stopSelf() // Stop service if location permission is not granted
         }
     }
+    private fun sendLocationToBackend(locationData: String) {
+        Log.d("sendLocationToBackend", "inside location sending method to backend")
+        val client = OkHttpClient()
+
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        val body: RequestBody = locationData.toRequestBody(mediaType)
+
+        val request = Request.Builder()
+            .url(backendUrl)
+            .post(body)
+            .build()
+
+        client.newCall(request).enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, e: IOException) {
+                e.printStackTrace() // Handle request failure
+                stopSelf() // Stop service on failure
+            }
+
+            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                if (response.isSuccessful) {
+                    // Stop the service after successful location send
+                    stopSelf()
+                } else {
+                    // Handle error response and stop service
+                    stopSelf()
+                }
+            }
+        })
+    }
+//    private fun setupLocationUpdates() {
+//        val locationRequest = LocationRequest.create().apply {
+//            interval = 10000 // 10 seconds
+//            fastestInterval = 5000 // 5 seconds
+//            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+//        }
+//
+//        locationCallback = object : LocationCallback() {
+//            override fun onLocationResult(locationResult: LocationResult) {
+//                locationResult.locations.forEach { location ->
+//                    // Handle location updates here
+//                    // For example, you could send this data to your Flutter app
+//                }
+//            }
+//        }
+//    }
+
+//    private fun startLocationUpdates() {
+//        try {
+//            fusedLocationClient.requestLocationUpdates(
+//                LocationRequest.create(),
+//                locationCallback,
+//                null
+//            )
+//        } catch (unlikely: SecurityException) {
+//            // Handle the case where location permission is not granted
+//        }
+//    }
 
     override fun onBind(intent: Intent?): IBinder? {
         return null
